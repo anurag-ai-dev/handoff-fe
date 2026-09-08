@@ -443,11 +443,17 @@
   function cfg(name) { return document.querySelector(`#config input[name="${name}"]`).value.trim(); }
   function ts()      { return new Date().toTimeString().slice(0, 8); }
 
+  // Server timestamps carry a UTC offset; the browser renders them in its own zone.
+  // Falls back to local time for bubbles the server has not stamped yet.
+  function fmtTime(iso) {
+    return iso
+      ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : ts();
+  }
+
   function addChat(chatId, cls, label, text, time) {
     const chat = document.getElementById(chatId);
-    const t = time
-      ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : ts();
+    const t = fmtTime(time);
     const msg = document.createElement('div');
     msg.className = `chat-msg ${cls}`;
     msg.innerHTML = `<div class="cm-meta">${label} · ${t}</div><div class="cm-text">${esc(text)}</div>`;
@@ -599,6 +605,8 @@
       const chat = document.getElementById('u-chat');
       let cmText;
       if (streamingBubble) {
+        streamingBubble.querySelector('.cm-meta').textContent =
+          `Assistant · ${fmtTime(d.timestamp)}`;
         cmText = streamingBubble.querySelector('.cm-text');
         cmText.innerHTML = esc(d.response);
         streamingBubble = null;
@@ -606,7 +614,7 @@
         const msg = document.createElement('div');
         msg.className = 'chat-msg bot';
         msg.innerHTML =
-          `<div class="cm-meta">Assistant · ${ts()}</div>` +
+          `<div class="cm-meta">Assistant · ${fmtTime(d.timestamp)}</div>` +
           `<div class="cm-text">${esc(d.response)}</div>`;
         chat.appendChild(msg);
         cmText = msg.querySelector('.cm-text');
@@ -651,7 +659,7 @@
     });
 
     socket.on('agent_message_received', (d) => {
-      addChat('u-chat', 'agent-in', d.agent_name || 'Agent', d.message);
+      addChat('u-chat', 'agent-in', d.agent_name || 'Agent', d.message, d.timestamp);
     });
 
     socket.on('handoff_timeout', () => {
@@ -932,7 +940,7 @@
     agentSocket.on('handoff_accepted', () => {});
 
     agentSocket.on('user_message_received', (d) => {
-      addChat('a-chat', 'client', pendingAssign?.clientName || 'User', d.message);
+      addChat('a-chat', 'client', pendingAssign?.clientName || 'User', d.message, d.timestamp);
     });
 
     agentSocket.on('agent_message_received', () => { /* shown optimistically */ });
